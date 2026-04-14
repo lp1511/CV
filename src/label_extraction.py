@@ -3,8 +3,8 @@ import pandas as pd
 import re
 
 image_extensions = {'.jpg', '.jpeg'}
-folder_path = 'D:/datasets/data/data_all'
-folder_path ='D:/datasets/data/data_all/output'
+folder_path = './datasets/data/data_all'
+folder_path ='./datasets/data/data_all/output'
 file_name = []
 label = []
 
