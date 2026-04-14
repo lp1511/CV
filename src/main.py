@@ -25,12 +25,9 @@ def detect_object(image_path, model):
 def extract_roi(image, box):
     x1, y1, x2, y2 = map(int, box)
     roi = image[y1:y2, x1:x2]
-
     h, w = roi.shape[0:2]
-
     if h > w:
         roi = cv2.rotate(roi, cv2.ROTATE_90_CLOCKWISE)
-
     return roi
 
 def preprocess_roi(image, target_size=(img_width, img_height)):
