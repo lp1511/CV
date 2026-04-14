@@ -7,8 +7,9 @@ import ocr_func as ocrf
 import result_processing as rp
 
 img_width, img_height = 128, 40
+
 def detect_object(image_path, model):
-    # Запуск детекции
+    """Находим местоположение табло на изображении"""
     results = model(image_path)
     result = results[0]
     image = cv2.imread(image_path)
@@ -23,26 +24,20 @@ def detect_object(image_path, model):
 
 
 def extract_roi(image, box):
+    """вырезаем интересующую область"""
     x1, y1, x2, y2 = map(int, box)
     roi = image[y1:y2, x1:x2]
+
     h, w = roi.shape[0:2]
+
     if h > w:
         roi = cv2.rotate(roi, cv2.ROTATE_90_CLOCKWISE)
+
     return roi
 
-def preprocess_roi(image, target_size=(img_width, img_height)):
-    """Загрузка и предобработка изображения"""
-    if len(image.shape) == 3:
-        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        gray_image = image
-
-    resized_image = cv2.resize(gray_image, target_size, interpolation=cv2.INTER_AREA)
-    normalized_image = resized_image.astype('float32') / 255.0
-    return normalized_image
 
 def process_image(image_path, detection_model, rec_model):
-    # детекция таблички
+    """Обработка одного изображения - детекция и распознавание текста"""
     image, box, detection_confidence = detect_object(image_path, detection_model)
     if box is None:
         return {
@@ -70,6 +65,7 @@ def process_image(image_path, detection_model, rec_model):
         }
 
 def process_folder(folder_path, prefix, det_model, rec_model, confidence_threshold):
+    """Обработка изображений в папке"""
     results = []
 
     image_extensions = {'.jpg', '.jpeg'}
@@ -86,11 +82,11 @@ def process_folder(folder_path, prefix, det_model, rec_model, confidence_thresho
     df = pd.DataFrame(results)
     print(df)
 
+    # вычисление новых имён файлов
     result_df = rp.create_result_df(prefix, confidence_threshold, df).sort_values(by='confidence')
-    print(result_df)
-
+    # переименовываем файлы
     rp.rename_files_from_dataframe(folder_path, result_df)
-
+    # печатаем результаты в xls и сsv
     rp.print_to_xls(result_df, confidence_threshold, folder_path)
     rp.print_to_csv(result_df, folder_path)
 
@@ -101,17 +97,15 @@ def process_folder(folder_path, prefix, det_model, rec_model, confidence_thresho
 if __name__ == '__main__':
 
     pd.set_option('display.max_columns', None)
-
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    # Расположение моделей
     detection_model_path = os.path.join(BASE_DIR, 'models', 'label_detection_model.pt')
     ocr_model_path = os.path.join(BASE_DIR, 'models', 'best_ocr_model.keras')
-
     detection_model = YOLO(detection_model_path)
     ocr_loaded_model = load_model(ocr_model_path,
                            custom_objects={'ctc_lambda_func': ocrf.ctc_lambda_func},
                            safe_mode=False)
+
     # модель для предсказаний (без CTC-слоя)
     input_img = ocr_loaded_model.get_layer('input_image').output
     y_pred = ocr_loaded_model.get_layer('output').output
