@@ -3,14 +3,13 @@ import numpy as np
 from tensorflow.keras import backend as K
 
 
-# Параметры (должны совпадать с теми, что использовались при обучении)
-
+# Параметры (как при обучении)
 img_width, img_height = 128, 40
 char_list = '0123456789'
 n_classes = 11  # 0–9 + blank
 blank_index = 10
 
-# Создаём словарь: индекс → символ для декодирования
+# Словарь: индекс → символ для декодирования
 index_to_char = {idx: char for idx, char in enumerate(char_list)}
 index_to_char[blank_index] = ''  # blank-символ
 
@@ -97,37 +96,35 @@ def calculate_confidence(prediction_sequence, decoded_indices, blank_index=10):
     return confidence
 
 def predict_on_image(model, image):
-    """
-    Функция для предсказания на конкретном изображении
-    """
-    # 1. Загружаем и предобрабатываем изображение
+    """ Предсказание на конкретном изображении"""
+    # Загружаем и предобрабатываем изображение
     processed_image = preprocess_image(image)
 
-    # 2. Добавляем размерности для batch и channels
+    # Добавляем размерности для batch и channels
     input_image = np.expand_dims(processed_image, axis=0)  # batch dimension
     input_image = np.expand_dims(input_image, axis=-1)  # channels dimension
 
-    # 3. Делаем предсказание
+    # Делаем предсказание
     prediction = model.predict(input_image, verbose=0)
 
-    # 4. Определяем реальную длину последовательности (после CNN)
+    # Определяем реальную длину последовательности (после CNN)
     input_length = img_width // 4  # или точное значение после CNN
 
-    # 5. Декодируем предсказание
+    # Декодируем предсказание
     decoded_indices = ctc_decode_single_prediction(
         prediction[0],  # берём первый элемент из batch
         input_length,
         blank_index
     )
 
-    # 6. Рассчитываем уверенность распознавания
+    # Рассчитываем уверенность распознавания
     confidence = calculate_confidence(
         prediction[0],
         decoded_indices,
         blank_index
     )
 
-    # 7. Конвертируем индексы в строку
+    # Конвертируем индексы в строку
     predicted_text = ''.join([index_to_char[idx] for idx in decoded_indices if idx != blank_index])
 
     return predicted_text, confidence
