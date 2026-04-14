@@ -9,7 +9,7 @@ results = model.train(
     epochs=50,
     imgsz=640,
     batch=8,
-    save=True,         # Сохранение моделей
+    save=True,     
     verbose=True
 )
 
