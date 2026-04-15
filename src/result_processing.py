@@ -77,7 +77,7 @@ def print_to_xls(df, threshold, folder_path):
     cnt_low_confidence = df.query('confidence < @threshold and detection_confidence!=0').shape[0]
     cnt_renamed = df.query('confidence >= @threshold').shape[0]
 
-    with pd.ExcelWriter(folder_path + '/logs_test.xlsx', engine='openpyxl') as writer:
+    with pd.ExcelWriter(folder_path + '/logs.xlsx', engine='openpyxl') as writer:
         df_cut = df[['file_name','detection_confidence','recognition_confidence','confidence','text', 'new_name']]
         df_cut.to_excel(writer, sheet_name='Отчёт', index=False, startrow=3)
 
