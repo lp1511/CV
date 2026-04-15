@@ -3,10 +3,13 @@ import pandas as pd
 from openpyxl.styles import Font, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
+# Создаём df с результатами детекции и распознавания по каждому изображению
 def create_result_df(prefix, threshold, df):
     df['text'] = df['text'].astype('str')
     df['prefix'] = str(prefix)
     df['confidence'] = df['detection_confidence'] * df['recognition_confidence']
+    df['confidence'] = df['confidence'].round(3)
+    df['recognition_confidence'] = df['recognition_confidence'].round(3)
     df['new_name1'] = df.apply(
         lambda row: '!_' + row['file_name'] if row['detection_confidence'] == 0 or row['text'] == 'no text'
         else '!_' + row['prefix'] + row['text'].zfill(4) + row['file_ext'] if row['confidence'] < threshold
@@ -28,6 +31,7 @@ def create_result_df(prefix, threshold, df):
     )
     return df
 
+# Рассчитываем новое имя файла
 def rename_files_from_dataframe(folder_path, df, old_name_col='file_name', new_name_col='new_name'):
     results = {
         'success': [],
@@ -66,7 +70,7 @@ def rename_files_from_dataframe(folder_path, df, old_name_col='file_name', new_n
     return results
 
 
-
+# Печатаем свод по результатам в xls
 def print_to_xls(df, threshold, folder_path):
 
     cnt_no_detections = df.query('detection_confidence==0').shape[0]
@@ -74,7 +78,7 @@ def print_to_xls(df, threshold, folder_path):
     cnt_renamed = df.query('confidence >= @threshold').shape[0]
 
     with pd.ExcelWriter(folder_path + '/logs_test.xlsx', engine='openpyxl') as writer:
-        df_cut = df[['file_name','detection_confidence','recognition_confidence','text', 'new_name']]
+        df_cut = df[['file_name','detection_confidence','recognition_confidence','confidence','text', 'new_name']]
         df_cut.to_excel(writer, sheet_name='Отчёт', index=False, startrow=3)
 
         # Получаем лист
@@ -114,8 +118,9 @@ def print_to_xls(df, threshold, folder_path):
         # Устанавливаем ширину столбцов (50 символов)
         for col in range(1, worksheet.max_column + 1):
             column_letter = get_column_letter(col)
-            worksheet.column_dimensions[column_letter].width = 30
+            worksheet.column_dimensions[column_letter].width = 25
 
+# Выгружаем результаты распознавания в csv
 def print_to_csv(df, folder_path):
     df_cut = df[['file_name', 'text']]
     df_cut.to_csv(folder_path + '/recognition_results.csv', encoding='utf-8', index=False)
