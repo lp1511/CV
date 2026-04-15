@@ -112,58 +112,58 @@ def create_ocr_model(img_width, img_height, n_classes=11):
     input_length = layers.Input(shape=[1], dtype='int32', name='input_length')
     label_length = layers.Input(shape=[1], dtype='int32', name='label_length')
 
-    # CNN с L2‑регуляризацией и Dropout
+    # CNN часть с L2‑регуляризацией и Dropout
     x = layers.Conv2D(
         32,
         (3, 3),
         activation='relu',
         padding='same',
-        kernel_regularizer=regularizers.l2(1e-4)
+        kernel_regularizer=regularizers.l2(5e-4)
     )(input_img)
     x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.4)(x)
-    x = layers.MaxPooling2D(pool_size=(2, 2))(x)  # (None, 75, 256, 32)
+    x = layers.Dropout(0.5)(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)  
 
     x = layers.Conv2D(
         64,
         (3, 3),
         activation='relu',
         padding='same',
-        kernel_regularizer=regularizers.l2(1e-4)
+        kernel_regularizer=regularizers.l2(5e-4)
     )(x)
     x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.4)(x)
-    x = layers.MaxPooling2D(pool_size=(2, 2))(x)  # (None, 37, 128, 64)
+    x = layers.Dropout(0.5)(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x) 
 
     x = layers.Conv2D(
         128,
         (3, 3),
         activation='relu',
         padding='same',
-        kernel_regularizer=regularizers.l2(1e-4)
+        kernel_regularizer=regularizers.l2(5e-4)
     )(x)  # (None, 37, 128, 128)
     x = layers.BatchNormalization()(x)
     x = layers.Dropout(0.5)(x)
 
     # размеры после CNN
-    new_height = x.shape[1]  # 37
+    new_height = x.shape[1]
     new_width = x.shape[2]   # 128
 
     # Reshape для преобразования в последовательность
-    x = layers.Reshape(target_shape=(new_width, new_height * 128))(x)  # (None, 128, 4736)
+    x = layers.Reshape(target_shape=(new_width, new_height * 128))(x) 
 
     # Нормализация и Dropout перед LSTM
     x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.4)(x)  
+    x = layers.Dropout(0.4)(x)  #
 
-    # LSTM с регуляризацией и dropout
+    # LSTM с регуляризацией
     x = layers.Bidirectional(layers.LSTM(
         128,
         return_sequences=True,
         dropout=0.5,
         recurrent_dropout=0.4,
-        kernel_regularizer=regularizers.l2(5e-4),
-        recurrent_regularizer=regularizers.l2(2e-4)
+        kernel_regularizer=regularizers.l2(1e-3),
+        recurrent_regularizer=regularizers.l2(5e-4)
     ))(x)  # (None, 128, 256)
 
     x = layers.Bidirectional(layers.LSTM(
@@ -171,8 +171,8 @@ def create_ocr_model(img_width, img_height, n_classes=11):
         return_sequences=True,
         dropout=0.5,
         recurrent_dropout=0.4,
-        kernel_regularizer=regularizers.l2(5e-4),
-        recurrent_regularizer=regularizers.l2(2e-4)
+        kernel_regularizer=regularizers.l2(1e-3),
+        recurrent_regularizer=regularizers.l2(5e-4)
     ))(x)   # (None, 128, 128)
 
     # TimeDistributed Dense с регуляризацией
