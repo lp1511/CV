@@ -313,7 +313,6 @@ class_names = [str(i) for i in range(10)] + ['blank']
 y_true_flat, y_pred_flat = flatten_sequences(y_test_labels, decoded_greedy, blank_index)
 y_true_flat_filtered = [y for y in y_true_flat if y != blank_index]
 y_pred_flat_filtered = [p for p, y in zip(y_pred_flat, y_true_flat) if y != blank_index]
-
 labels_filtered = list(range(10))
 target_names_filtered = [str(i) for i in range(10)]
 
