@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import precision_score
 
-df = pd.read_excel('D:/datasets/data/test_ocr/logs.xlsx')
-true_labels = pd.read_csv('D:/datasets/data/test_ocr/label_list.csv')
+df = pd.read_excel('/data/test_ocr/logs.xlsx')
+true_labels = pd.read_csv('/data/test_ocr/label_list.csv')
 df = df.merge(true_labels, on='file_name', how='left')
 
 thresholds = np.arange(0.2, 1.0, 0.05)
