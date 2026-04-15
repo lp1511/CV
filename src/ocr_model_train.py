@@ -23,10 +23,10 @@ char_to_index[''] = blank_index
 
 
 def text_to_labels(text):
-    # Гарантируем, что text — строка
+    # text — строка
     if not isinstance(text, str):
         text = str(text)
-    # Преобразуем каждый символ в индекс
+    # каждый символ в индекс
     return [char_to_index[char] for char in text]
 
 def load_and_preprocess_image(image_path, target_size=(img_width, img_height)):
