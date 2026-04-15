@@ -10,7 +10,6 @@ import albumentations as A
 from collections import Counter
 import matplotlib.pyplot as plt
 
-
 # Параметры
 char_list = '0123456789'
 blank_index = 10
@@ -21,6 +20,7 @@ n_classes = 11  # 0–9 + blank
 char_to_index = {char: idx for idx, char in enumerate(char_list)}
 # Добавляем blank-символ
 char_to_index[''] = blank_index
+
 
 def text_to_labels(text):
     # Гарантируем, что text — строка
@@ -34,6 +34,10 @@ def load_and_preprocess_image(image_path, target_size=(img_width, img_height)):
     image = cv2.imread(image_path)
     if image is None:
         raise FileNotFoundError(f"Не удалось загрузить изображение: {image_path}")
+    h, w = image.shape[0:2]
+
+    if h > w:
+        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     resized_image = cv2.resize(gray_image, target_size, interpolation=cv2.INTER_AREA)
     normalized_image = resized_image.astype('float32') / 255.0
@@ -41,17 +45,18 @@ def load_and_preprocess_image(image_path, target_size=(img_width, img_height)):
 
 # Аугментации
 augmentation_transform = A.Compose([
-    A.GaussianBlur(blur_limit=(1, 3), p=0.2),
-    A.MotionBlur(p=0.1),
-    A.GaussNoise(var_limit=(10.0, 25.0), p=0.2),
-    A.RandomBrightnessContrast(p=0.2),
-    A.Affine(
-        translate_percent={"x": (-0.03, 0.03), "y": (-0.03, 0.03)},
-        scale=(0.95, 1.05),
-        rotate=(-3, 3),
+    A.GaussianBlur(blur_limit=(1, 2), p=0.1),  # уменьшаем интенсивность
+    A.RandomBrightnessContrast(
+        brightness_limit=0.1,
+        contrast_limit=0.1,
         p=0.2
     ),
-    A.GridDistortion(p=0.1)
+    A.Affine(
+        translate_percent={"x": (-0.02, 0.02), "y": (-0.02, 0.02)},
+        scale=(0.98, 1.02),
+        rotate=(-2, 2),
+        p=0.15
+    ),
 ])
 def apply_augmentation(images, texts, transform, factor=1, add_180_rotation=False):
     """Применяет аугментацию к набору изображений"""
@@ -78,6 +83,24 @@ def apply_augmentation(images, texts, transform, factor=1, add_180_rotation=Fals
 
     return augmented_images, augmented_texts
 
+def balance_dataset(X_train, y_train, min_samples=30):
+    """Балансировка классов - oversampling редких классов"""
+    class_counts = Counter(y_train)
+    X_balanced, y_balanced = [], []
+
+    for x, y in zip(X_train, y_train):
+        X_balanced.append(x)
+        y_balanced.append(y)
+
+        # Если класс редкий, добавляем дополнительные копии
+        if class_counts[y] < min_samples:
+            # Добавляем 1–2 дополнительные копии для редких классов
+            aug_factor = min(2, max(1, min_samples // class_counts[y]))
+            for _ in range(aug_factor):
+                X_balanced.append(x)
+                y_balanced.append(y)
+    return np.array(X_balanced), np.array(y_balanced)
+
 def ctc_lambda_func(args):
     y_pred, labels, input_length, label_length = args
     labels = K.cast(labels, 'int32')
@@ -89,7 +112,7 @@ def create_ocr_model(img_width, img_height, n_classes=11):
     input_length = layers.Input(shape=[1], dtype='int32', name='input_length')
     label_length = layers.Input(shape=[1], dtype='int32', name='label_length')
 
-    # CNN часть с L2‑регуляризацией и Dropout
+    # CNN с L2‑регуляризацией и Dropout
     x = layers.Conv2D(
         32,
         (3, 3),
@@ -98,7 +121,7 @@ def create_ocr_model(img_width, img_height, n_classes=11):
         kernel_regularizer=regularizers.l2(1e-4)
     )(input_img)
     x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.3)(x)
+    x = layers.Dropout(0.4)(x)
     x = layers.MaxPooling2D(pool_size=(2, 2))(x)  # (None, 75, 256, 32)
 
     x = layers.Conv2D(
@@ -131,25 +154,25 @@ def create_ocr_model(img_width, img_height, n_classes=11):
 
     # Нормализация и Dropout перед LSTM
     x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.4)(x)  # Увеличили с 0.3
+    x = layers.Dropout(0.4)(x)  
 
-    # LSTM с регуляризацией
+    # LSTM с регуляризацией и dropout
     x = layers.Bidirectional(layers.LSTM(
         128,
         return_sequences=True,
-        dropout=0.4,
-        recurrent_dropout=0.3,
+        dropout=0.5,
+        recurrent_dropout=0.4,
         kernel_regularizer=regularizers.l2(5e-4),
-        recurrent_regularizer=regularizers.l2(1e-4)
+        recurrent_regularizer=regularizers.l2(2e-4)
     ))(x)  # (None, 128, 256)
 
     x = layers.Bidirectional(layers.LSTM(
         64,
         return_sequences=True,
-        dropout=0.4,
-        recurrent_dropout=0.3,
+        dropout=0.5,
+        recurrent_dropout=0.4,
         kernel_regularizer=regularizers.l2(5e-4),
-        recurrent_regularizer=regularizers.l2(5e-4)
+        recurrent_regularizer=regularizers.l2(2e-4)
     ))(x)   # (None, 128, 128)
 
     # TimeDistributed Dense с регуляризацией
@@ -225,7 +248,7 @@ X_train_prep, X_test, y_train_prep, y_test = train_test_split(
     random_state=42#,
     #stratify=y_original
 )
-
+print('train_prep', X_train_prep.shape, y_train_prep.shape)
 # аугментация  тренировочной выборки
 X_aug_list, y_aug_list = apply_augmentation(
     X_train_prep,
@@ -237,14 +260,17 @@ X_aug_list, y_aug_list = apply_augmentation(
 
 X_aug = np.array(X_aug_list)
 y_aug = np.array(y_aug_list)  # y_aug — строки
+print('aug', X_aug.shape, y_aug.shape)
 
-# объединение исходных тренировочных данных с аугментированными
-X_train = np.concatenate([X_train_prep, X_aug], axis=0)
-y_train = np.concatenate([y_train_prep, y_aug], axis=0)  # y_train_final — строки
+# балансировка классов
+X_aug_balanced, y_aug_balanced = balance_dataset(X_aug, y_aug)
+print('aug_balanced', X_aug_balanced.shape, y_aug_balanced.shape)
 
+X_train = X_aug_balanced
+y_train = y_aug_balanced
+print('train', X_train.shape, y_train.shape)
 
 # подготовка данных для CTC loss — преобразуем тексты в индексы после разделения
-# Преобразуем тексты в индексы
 X_train_ctc, y_train_labels, train_input_lengths, train_label_lengths = prepare_ctc_inputs(
     X_train, y_train, img_width, img_height
 )
@@ -252,19 +278,14 @@ X_test_ctc, y_test_labels, test_input_lengths, test_label_lengths = prepare_ctc_
     X_test, y_test, img_width, img_height
 )
 
-y_train_labels_fixed = np.where(y_train_labels == -1, 10, y_train_labels)
-y_test_labels_fixed = np.where(y_test_labels == -1, 10, y_test_labels)
-
-y_train_labels = y_train_labels_fixed
-y_test_labels = y_test_labels_fixed
-
 # cоздание модели
 
+print(y_train_labels.shape, y_test_labels.shape)
 model = create_ocr_model(img_width, img_height, n_classes)
 
 # компиляция модели
 model.compile(
-    optimizer=keras.optimizers.Adam(learning_rate=0.001),
+    optimizer=keras.optimizers.Adam(learning_rate=0.0005),
     loss={'ctc': lambda y_true, y_pred: y_pred}
 )
 
@@ -328,12 +349,5 @@ test_class_counts = Counter(y_test)
 print("Баланс классов в train:", train_class_counts)
 print("Баланс классов в test:", test_class_counts)
 
-# Визуализация распределения val_loss
-plt.plot(history.history['val_loss'], label='Val Loss')
-plt.axhline(y=2.0057, color='r', linestyle='--', label='Best Val Loss')
-plt.xlabel('Эпоха')
-plt.ylabel('Loss')
-plt.legend()
-plt.title('Динамика val_loss')
-plt.show()
+
 
