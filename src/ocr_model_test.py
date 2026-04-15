@@ -10,6 +10,7 @@ import tensorflow as tf
 from tensorflow.keras.models import load_model, Model
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
+import shutil
 
 # Параметры
 char_list = '0123456789'
@@ -34,6 +35,10 @@ def load_and_preprocess_image(image_path, target_size=(img_width, img_height)):
     image = cv2.imread(image_path)
     if image is None:
         raise FileNotFoundError(f"Не удалось загрузить изображение: {image_path}")
+    h, w = image.shape[0:2]
+
+    if h > w:
+        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     resized_image = cv2.resize(gray_image, target_size, interpolation=cv2.INTER_AREA)
     normalized_image = resized_image.astype('float32') / 255.0
@@ -67,12 +72,12 @@ def prepare_ctc_inputs(images, texts, img_width, img_height):
         label_lengths[i] = actual_len
 
         # Реальная длина последовательности после CNN
-        input_lengths[i] = img_width // 4  # или точное значение после CNN
+        input_lengths[i] = img_width // 4
 
     return X_data, labels, input_lengths, label_lengths
 
 def calculate_metrics(true_labels, predicted_labels):
-    """Расчёт метрик качества OCR."""
+    """Расчёт метрик качества"""
     # Конвертируем индексы в строки для сравнения
     index_to_char = {v: k for k, v in char_to_index.items()}
 
@@ -94,7 +99,7 @@ def calculate_metrics(true_labels, predicted_labels):
         levenshtein_distance(t, p) for t, p in zip(true_strings, pred_strings)
     ) / len(true_strings)
 
-    print(f"Accuracy (точное совпадение): {accuracy:.4f}")
+    print(f"Accuracy: {accuracy:.4f}")
     print(f"Среднее расстояние Левенштейна: {avg_levenshtein:.4f}")
 
     return accuracy, avg_levenshtein
@@ -153,7 +158,7 @@ def apply_length_penalty(logits, penalty=0.0):
 
 
 def ctc_decode_predictions(predictions, input_lengths, blank_index=10, beam_search=False, beam_width=10, length_penalty=0.0):
-    """CTC‑декодирование с поддержкой Beam Search и расчётом уверенности."""
+    """CTC‑декодирование"""
     decoded_sequences = []
     confidences = []
 
@@ -209,7 +214,7 @@ def analyze_errors(cm, class_names):
     # Сортируем по количеству ошибок (убывание)
     errors.sort(key=lambda x: x[2], reverse=True)
 
-    print("ТОП‑10 наиболее частых ошибок:")
+    print("Наиболее частые ошибок:")
     for true_class, pred_class, count in errors[:10]:
         print(f"Символ '{true_class}' ошибочно распознан как '{pred_class}': {count} раз")
 
@@ -262,22 +267,19 @@ for _, row in labels_df.iterrows():
 X_original = np.array(images)
 y_original = np.array(texts)  # Сохраняем строки
 
-# Разделение на обучающую и тестовую выборки
 X_train_prep, X_test, y_train_prep, y_test = train_test_split(
     X_original,
-    y_original,  # y_train и y_test — строки
+    y_original,
     test_size=0.2,
-    random_state=42#,
-    #stratify=y_original
+    random_state=42
 )
-
 # Преобразуем тексты в индексы для test
 X_test_ctc, y_test_labels, test_input_lengths, test_label_lengths = prepare_ctc_inputs(
     X_test, y_test, img_width, img_height
 )
-
+#C:/Users/User/Safer_Project/digits_recognition/models/best_ocr_model.keras
 try:
-    loaded_model = load_model('best_ocr_model.keras', custom_objects={'ctc_lambda_func': ctc_lambda_func}, safe_mode=False)
+    loaded_model = load_model('C:/Users/User/Safer_Project/digits_recognition/models/best_ocr_model.keras', custom_objects={'ctc_lambda_func': ctc_lambda_func}, safe_mode=False)
     print("Модель загружена успешно!")
 except Exception as e:
     print(f"Ошибка загрузки модели: {e}")
@@ -302,11 +304,10 @@ decoded_greedy, confidences_greedy = ctc_decode_predictions(
     test_predictions, test_input_lengths_actual, beam_search=False)
 
 # Расчёт метрик
-print("\nМЕТРИКИ КАЧЕСТВА:")
+print("\nМетрики качества:")
 accuracy, avg_levenshtein = calculate_metrics(y_test_labels, decoded_greedy)
 
-
-
+# для confusion matrix
 class_names = [str(i) for i in range(10)] + ['blank']
 # Преобразуем последовательности в плоские массивы
 y_true_flat, y_pred_flat = flatten_sequences(y_test_labels, decoded_greedy, blank_index)
@@ -329,27 +330,18 @@ sns.heatmap(
     xticklabels=class_names,
     yticklabels=class_names
 )
-plt.title('Confusion Matrix для OCR‑модели (Greedy Decoding)')
+plt.title('Confusion Matrix')
 plt.xlabel('Предсказанные символы')
 plt.ylabel('Истинные символы')
 plt.tight_layout()
 plt.show()
-
-# классификация
-print("\nCLASSIFICATION REPORT (Greedy, без blank):")
-print(classification_report(
-    y_true_flat_filtered,
-    y_pred_flat_filtered,
-    labels=labels_filtered,
-    target_names=target_names_filtered
-))
 
 # Анализ ошибок
 analyze_errors(cm, class_names)
 
 # Точность по символам
 per_class_accuracy = np.diagonal(cm) / cm.sum(axis=1)
-print("\nТОЧНОСТЬ ПО СИМВОЛАМ (Greedy):")
+print("\naccuracy по символам:")
 for i, acc in enumerate(per_class_accuracy):
     symbol = class_names[i]
     support = cm.sum(axis=1)[i]
