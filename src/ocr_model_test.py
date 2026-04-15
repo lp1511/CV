@@ -249,8 +249,8 @@ def flatten_sequences(true_sequences, pred_sequences, blank_index=10):
 # Загрузка исходных данных
 images = []
 texts = []
-labels_df = pd.read_csv('D:/datasets/data/data_all/output/label_list.csv')
-image_folder = 'D:/datasets/data/data_all/output'
+labels_df = pd.read_csv('./data/data_all/output/label_list.csv')
+image_folder = './data/data_all/output' # здесь лежат вырезанные изображения детектированных табло
 
 for _, row in labels_df.iterrows():
     filename = row['file_name']
