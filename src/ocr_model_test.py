@@ -277,9 +277,9 @@ X_train_prep, X_test, y_train_prep, y_test = train_test_split(
 X_test_ctc, y_test_labels, test_input_lengths, test_label_lengths = prepare_ctc_inputs(
     X_test, y_test, img_width, img_height
 )
-#C:/Users/User/Safer_Project/digits_recognition/models/best_ocr_model.keras
+#модель для предсказаний (без CTC-слоя)
 try:
-    loaded_model = load_model('C:/Users/User/Safer_Project/digits_recognition/models/best_ocr_model.keras', custom_objects={'ctc_lambda_func': ctc_lambda_func}, safe_mode=False)
+    loaded_model = load_model('best_ocr_model.keras', custom_objects={'ctc_lambda_func': ctc_lambda_func}, safe_mode=False)
     print("Модель загружена успешно!")
 except Exception as e:
     print(f"Ошибка загрузки модели: {e}")
