@@ -83,7 +83,7 @@ def apply_augmentation(images, texts, transform, factor=1, add_180_rotation=Fals
 
     return augmented_images, augmented_texts
 
-def balance_dataset(X_train, y_train, min_samples=30):
+def balance_dataset(X_train, y_train, min_samples=5):
     """Балансировка классов - oversampling редких классов"""
     class_counts = Counter(y_train)
     X_balanced, y_balanced = [], []
@@ -94,7 +94,7 @@ def balance_dataset(X_train, y_train, min_samples=30):
 
         # Если класс редкий, добавляем дополнительные копии
         if class_counts[y] < min_samples:
-            # Добавляем 1–2 дополнительные копии для редких классов
+            # Добавляем дополнительные копии для редких классов
             aug_factor = min(2, max(1, min_samples // class_counts[y]))
             for _ in range(aug_factor):
                 X_balanced.append(x)
@@ -112,82 +112,39 @@ def create_ocr_model(img_width, img_height, n_classes=11):
     input_length = layers.Input(shape=[1], dtype='int32', name='input_length')
     label_length = layers.Input(shape=[1], dtype='int32', name='label_length')
 
-    # CNN часть с L2‑регуляризацией и Dropout
-    x = layers.Conv2D(
-        32,
-        (3, 3),
-        activation='relu',
-        padding='same',
-        kernel_regularizer=regularizers.l2(5e-4)
-    )(input_img)
-    x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.5)(x)
-    x = layers.MaxPooling2D(pool_size=(2, 2))(x)  
-
-    x = layers.Conv2D(
-        64,
-        (3, 3),
-        activation='relu',
-        padding='same',
-        kernel_regularizer=regularizers.l2(5e-4)
-    )(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.5)(x)
+    # CNN 
+    x = layers.Conv2D(32, (3, 3), activation='relu', padding='same')(input_img)
     x = layers.MaxPooling2D(pool_size=(2, 2))(x) 
 
-    x = layers.Conv2D(
-        128,
-        (3, 3),
-        activation='relu',
-        padding='same',
-        kernel_regularizer=regularizers.l2(5e-4)
-    )(x)  # (None, 37, 128, 128)
-    x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.5)(x)
+    x = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x) 
 
-    # размеры после CNN
-    new_height = x.shape[1]
-    new_width = x.shape[2]   # 128
+    x = layers.Conv2D(128, (3, 3), activation='relu', padding='same')(x)
+
+    # Рассчитываем новые размеры после CNN
+    new_height = x.shape[1] 
+    new_width = x.shape[2] 
 
     # Reshape для преобразования в последовательность
-    x = layers.Reshape(target_shape=(new_width, new_height * 128))(x) 
+    x = layers.Reshape(target_shape=(new_width, new_height * 128))(x)
 
-    # Нормализация и Dropout перед LSTM
+    # Нормализация и Dropout
     x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.4)(x)  #
+    x = layers.Dropout(0.3)(x)
 
-    # LSTM с регуляризацией
-    x = layers.Bidirectional(layers.LSTM(
-        128,
-        return_sequences=True,
-        dropout=0.5,
-        recurrent_dropout=0.4,
-        kernel_regularizer=regularizers.l2(1e-3),
-        recurrent_regularizer=regularizers.l2(5e-4)
-    ))(x)  # (None, 128, 256)
+    # LSTM 
+    x = layers.Bidirectional(layers.LSTM(128, return_sequences=True, dropout=0.25, recurrent_dropout=0.25))(x)
+    x = layers.Bidirectional(layers.LSTM(64, return_sequences=True, dropout=0.25, recurrent_dropout=0.25))(x)
 
-    x = layers.Bidirectional(layers.LSTM(
-        64,
-        return_sequences=True,
-        dropout=0.5,
-        recurrent_dropout=0.4,
-        kernel_regularizer=regularizers.l2(1e-3),
-        recurrent_regularizer=regularizers.l2(5e-4)
-    ))(x)   # (None, 128, 128)
-
-    # TimeDistributed Dense с регуляризацией
-    y_pred = layers.TimeDistributed(layers.Dense(
-        n_classes,
-        activation='softmax',
-        kernel_regularizer=regularizers.l2(1e-4)
-    ), name='output')(x)  # (None, 128, 11)
+    # TimeDistributed Dense
+    y_pred = layers.TimeDistributed(layers.Dense(n_classes, activation='softmax'), name='output')(x) 
 
     # CTC слой
     loss_out = layers.Lambda(ctc_lambda_func, output_shape=(1,), name='ctc')([y_pred, labels, input_length, label_length])
 
     model = models.Model(
-        inputs=[input_img, labels, input_length, label_length],
-        outputs=loss_out
+    inputs=[input_img, labels, input_length, label_length],
+    outputs=loss_out
     )
     return model
 
